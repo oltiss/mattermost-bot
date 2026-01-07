@@ -7,7 +7,7 @@ from mcp.types import CallToolResult
 # KONFIGURACJA ADRESÓW (Domyślne)
 OLLAMA_HOST = "http://localhost:11434"
 MCP_SERVER_URL = "http://localhost:8000/sse"
-MODEL_NAME = "llama3.1"
+MODEL_NAME = "gemma3:1b"
 
 async def process_query(prompt: str, ollama_host: str = OLLAMA_HOST, mcp_url: str = MCP_SERVER_URL, model: str = MODEL_NAME) -> str:
     print(f"🔗 Łączenie z MCP (Narzędzia) pod: {mcp_url}...")
