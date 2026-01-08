@@ -7,13 +7,16 @@ from mcp.types import CallToolResult
 # KONFIGURACJA ADRESÓW (Domyślne)
 OLLAMA_HOST = "http://localhost:11434"
 MCP_SERVER_URL = "http://localhost:8000/sse"
-MODEL_NAME = "gemma3:1b"
+MODEL_NAME = "llama3.1:latest"
 
 async def process_query(prompt: str, ollama_host: str = OLLAMA_HOST, mcp_url: str = MCP_SERVER_URL, model: str = MODEL_NAME) -> str:
     print(f"🔗 Łączenie z MCP (Narzędzia) pod: {mcp_url}...")
 
     ollama_client = ollama.Client(host=ollama_host)
-    messages = [{"role": "user", "content": prompt}]
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant. You have access to tools for querying a database, but you should ONLY use them when the user explicitly asks for data or performs an action that requires them. For greetings (like 'hi', 'hello'), general questions, or small talk, respond naturally as a chat assistant without using or mentioning tools."},
+        {"role": "user", "content": prompt}
+    ]
 
     try:
         # Łączymy się z serwerem MCP
@@ -81,8 +84,13 @@ async def process_query(prompt: str, ollama_host: str = OLLAMA_HOST, mcp_url: st
                     return content
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"❌ Błąd: {e}")
-        return f"Wystąpił błąd podczas przetwarzania: {str(e)}"
+        error_details = str(e)
+        if hasattr(e, 'exceptions'):
+            error_details += f" ({'; '.join(str(sub) for sub in e.exceptions)})"
+        return f"Wystąpił błąd podczas przetwarzania: {error_details}"
 
 if __name__ == "__main__":
     # Test lokalny

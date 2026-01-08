@@ -1,104 +1,68 @@
 # server.py
 from fastmcp import FastMCP
 import os
+import psycopg2
+from dotenv import load_dotenv
+
+# Wczytaj zmienne środowiskowe
+load_dotenv()
 
 # Inicjalizacja serwera
 mcp = FastMCP("Mój Serwer Lokalny")
 
-@mcp.tool()
-def oblicz_sume(a: int, b: int) -> int:
-    """
-    Dodaje dwie liczby całkowite. Użyj tego do prostych obliczeń.
+# Konfiguracja bazy danych
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_NAME = os.getenv("DB_NAME", "postgres")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASS = os.getenv("DB_PASS", "password")
 
-    :param a: Pierwsza liczba
-    :param b: Druga liczba
-    :return: Suma liczb
-    """
-
-    return a + b
-
-@mcp.tool()
-def greeting(name: str) -> str:
-    """
-    Wysyła powitanie do użytkownika.
-
-    :param name: Imię użytkownika
-    :return: Powitanie
-    """
-    return f"Cześć {name}!"
-
-NOTES_FILE = os.path.join(os.path.dirname(__file__), "notes.txt")
-
-
-def ensure_file():
-    if not os.path.exists(NOTES_FILE):
-        with open(NOTES_FILE, "w", encoding='utf-8') as f:
-            f.write("")
+def get_db_connection():
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS
+    )
+    return conn
 
 @mcp.tool()
-def add_note(message: str) -> str:
+def query_database(query: str) -> str:
     """
-    Zapisuje notatkę użytkownika do pliku tekstowego.
-
-    Użyj tego narzędzia, gdy użytkownik chce coś zapamiętać lub zapisać na później.
-
-    :param message: Treść notatki do zapisania
-    :return: Potwierdzenie zapisania notatki
+    Wykonuje zapytanie SQL do bazy danych PostgreSQL.
+    Narzędzie działa w trybie TYLKO DO ODCZYTU.
+    Dozwolone są tylko zapytania SELECT.
     """
+    # 1. Wstępna walidacja zapytania
+    if not query.strip().upper().startswith("SELECT"):
+        return "Błąd: Dozwolone są tylko zapytania typu SELECT (tryb read-only)."
 
-    ensure_file()
-    with open(NOTES_FILE, "a", encoding='utf-8') as f:
-        f.write(message + "\n")
-    return "Note saved!"
+    try:
+        conn = get_db_connection()
+        # 2. Ustawienie sesji na read-only (dodatkowe zabezpieczenie po stronie bazy)
+        conn.set_session(readonly=True)
 
+        cur = conn.cursor()
+        cur.execute(query)
 
-@mcp.tool()
-def read_notes() -> str:
-    """
-    Odczytuje całą zawartość pliku z notatkami.
+        if cur.description:
+            rows = cur.fetchall()
+            columns = [desc[0] for desc in cur.description]
+            result = f"Kolumny: {', '.join(columns)}\n"
+            for row in rows:
+                result += f"{str(row)}\n"
 
-    Użyj tego narzędzia, gdy chcesz wiedzieć, co użytkownik zapisał wcześniej.
+            conn.commit()
+            cur.close()
+            conn.close()
+            return result
+        else:
+            conn.commit()
+            cur.close()
+            conn.close()
+            return "Brak danych."
 
-    :return: Pełna treść notatek
-    """
-    ensure_file()
-    with open(NOTES_FILE, "r", encoding='utf-8') as f:
-        content = f.read().strip()
-    return content or "No notes yet."
-
-
-@mcp.resource("notes://latest")
-def get_latest_note() -> str:
-    """
-    Pobiera tylko ostatnią dodaną notatkę.
-
-    Przydatne, gdy interesuje Cię tylko najnowszy wpis.
-
-    :return: Treść ostatniej notatki
-    """
-
-    ensure_file()
-    with open(NOTES_FILE, "r", encoding='utf-8') as f:
-        lines = f.readlines()
-    return lines[-1].strip() if lines else "No notes yet."
-
-
-@mcp.prompt()
-def note_summary_prompt() -> str:
-    """
-    Generuje prompt dla modelu, proszący o podsumowanie wszystkich notatek.
-
-    :return: Prompt z treścią notatek
-    """
-
-    ensure_file()
-    with open(NOTES_FILE, "r", encoding='utf-8') as f:
-        content = f.read().strip()
-    if not content:
-        return "There are no notes yet."
-    return f"Summarize the current notes: {content}"
-
-
+    except Exception as e:
+        return f"Błąd bazy danych: {str(e)}"
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="sse", port=8000)
