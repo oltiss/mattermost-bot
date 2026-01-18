@@ -15,6 +15,8 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_NAME = os.getenv("DB_NAME", "postgres")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASS", "password")
+DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
+
 
 def get_db_connection():
     conn = psycopg2.connect(
@@ -67,7 +69,7 @@ def query_database(query: str) -> str:
 from typing import List, Optional
 
 @mcp.tool()
-def get_database_schema(schema: str = "public", table_name: Optional[str] = None) -> str:
+def get_database_schema(schema: str = DB_SCHEMA, table_name: Optional[str] = None) -> str:
     """
     Pobiera schemat bazy danych.
     1. Jeśli `table_name` nie jest podane: zwraca listę wszystkich tabel i widoków w danym schemacie.
@@ -77,10 +79,10 @@ def get_database_schema(schema: str = "public", table_name: Optional[str] = None
     """
     return _get_database_schema_logic(schema, table_name)
 
-def _get_database_schema_logic(schema: str = "public", table_name: str = None) -> str:
+def _get_database_schema_logic(schema: str = DB_SCHEMA, table_name: str = None) -> str:
     # Handle empty strings from LLM as defaults
     if not schema:
-        schema = "public"
+        schema = DB_SCHEMA
     if not table_name:
         table_name = None
 
@@ -136,4 +138,4 @@ def _get_database_schema_logic(schema: str = "public", table_name: str = None) -
         return f"Błąd podczas pobierania schematu: {str(e)}"
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", port=8000, host="0.0.0.0")
+    mcp.run(transport="sse", port=8000)
