@@ -138,4 +138,5 @@ def _get_database_schema_logic(schema: str = DB_SCHEMA, table_name: str = None) 
         return f"Błąd podczas pobierania schematu: {str(e)}"
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", port=8000)
+    host = os.getenv("MCP_HOST", "0.0.0.0")
+    mcp.run(transport="sse", port=8000, host=host)
