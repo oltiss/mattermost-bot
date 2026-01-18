@@ -48,22 +48,20 @@ DB_SCHEMA=public
 ```
 
 ### 3. Install & Run
-You can use the provided helper script to set up a virtual environment, install dependencies, and start both the MCP server and the Bot server.
+
+#### Option A: 🐳 Docker (Recommended)
+This is the easiest way to run the bot.
 
 ```bash
-chmod +x install.sh
-./install.sh
+docker-compose up --build
 ```
 
-**What `install.sh` does:**
-1.  Creates a python virtual environment (`.venv`).
-2.  Installs requirements from `requirements.txt`.
-3.  Checks for `.env`.
-4.  Starts `server.py` (MCP Tool Server) on port 8000.
-5.  Starts `mattermost.py` (Flask Bot) on port 5000.
+This will start the **MCP Server** and **Mattermost Bot** in containers.
+*   Ensure your `.env` file is present.
+*   If your database is on the host machine, you might need to use `host.docker.internal` as `DB_HOST`.
 
-### Manual Run (Optional)
-If you prefer running manually:
+#### Option B: Manual Setup (Python)
+If you prefer running without Docker:
 
 ```bash
 python3 -m venv .venv
@@ -96,4 +94,5 @@ python mattermost.py
 *   `mattermost.py`: Main Flask application handling Mattermost webhooks.
 *   `server.py`: FastMCP server defining the database tools (`query_database`, `get_database_schema`).
 *   `ai_handler.py`: Logic for connecting to Ollama and routing tool calls to the MCP server.
-*   `install.sh`: Startup script.
+*   `ai_handler.py`: Logic for connecting to Ollama and routing tool calls to the MCP server.
+
