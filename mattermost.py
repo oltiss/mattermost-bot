@@ -28,14 +28,22 @@ def handle_background_processing(prompt, response_url):
         }
 
         # Send delayed response
-        requests.post(response_url, json=payload)
+        print(f"📤 Wysyłanie odpowiedzi do: {response_url}")
+        resp = requests.post(response_url, json=payload)
+        print(f"✅ Status wysyłki Mattermost: {resp.status_code}, Treść: {resp.text}")
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         # Send error message if something fails
         error_payload = {
             "response_type": "ephemeral",
             "text": f"Error processing request: {str(e)}"
         }
-        requests.post(response_url, json=error_payload)
+        try:
+             requests.post(response_url, json=error_payload)
+        except:
+             print("Failed to send error message to Mattermost.")
 
 @app.route('/', methods=['POST'])
 def mm_webhook():

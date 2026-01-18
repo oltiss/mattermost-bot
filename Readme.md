@@ -3,11 +3,19 @@
 
 ```
 MATTERMOST_TOKEN=
+
 FLASK_PORT=
+
 OLLAMA_HOST=
-MCP_SERVER_URL=
 MODEL_NAME=
+
+MCP_SERVER_URL=
+
+DB_HOST=
+DB_NAME=
+DB_USER=
+DB_PASS=
 ```
 
-3. run server.py
-4. run mattermost.py
+3. chmod +x install.sh
+4. ./install.sh

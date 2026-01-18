@@ -64,5 +64,76 @@ def query_database(query: str) -> str:
     except Exception as e:
         return f"Błąd bazy danych: {str(e)}"
 
+from typing import List, Optional
+
+@mcp.tool()
+def get_database_schema(schema: str = "public", table_name: Optional[str] = None) -> str:
+    """
+    Pobiera schemat bazy danych.
+    1. Jeśli `table_name` nie jest podane: zwraca listę wszystkich tabel i widoków w danym schemacie.
+    2. Jeśli `table_name` jest podane: zwraca listę kolumn i typów danych dla tej tabeli/widoku.
+
+    Używaj tego narzędzia, aby zrozumieć strukturę bazy danych przed utworzeniem zapytania SQL.
+    """
+    return _get_database_schema_logic(schema, table_name)
+
+def _get_database_schema_logic(schema: str = "public", table_name: str = None) -> str:
+    # Handle empty strings from LLM as defaults
+    if not schema:
+        schema = "public"
+    if not table_name:
+        table_name = None
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        if table_name:
+            # Pobierz szczegóły kolumn dla konkretnej tabeli
+            query = """
+                SELECT column_name, data_type, is_nullable
+                FROM information_schema.columns
+                WHERE table_schema = %s AND table_name = %s
+                ORDER BY ordinal_position;
+            """
+            cur.execute(query, (schema, table_name))
+            rows = cur.fetchall()
+
+            if not rows:
+                return f"Nie znaleziono tabeli o nazwie '{table_name}' w schemacie '{schema}'."
+
+            result = f"Struktura tabeli '{table_name}' (schemat: {schema}):\n"
+            result += "Kolumna | Typ Danych | Czy Null?\n"
+            result += "-" * 40 + "\n"
+            for row in rows:
+                result += f"{row[0]} | {row[1]} | {row[2]}\n"
+
+        else:
+            # Pobierz listę wszystkich tabel i widoków
+            query = """
+                SELECT table_name, table_type
+                FROM information_schema.tables
+                WHERE table_schema = %s
+                ORDER BY table_name;
+            """
+            cur.execute(query, (schema,))
+            rows = cur.fetchall()
+
+            if not rows:
+                return f"Nie znaleziono żadnych tabel w schemacie '{schema}'."
+
+            result = f"Lista tabel i widoków w schemacie '{schema}':\n"
+            result += "Nazwa Tabeli | Typ\n"
+            result += "-" * 30 + "\n"
+            for row in rows:
+                result += f"{row[0]} | {row[1]}\n"
+
+        cur.close()
+        conn.close()
+        return result
+
+    except Exception as e:
+        return f"Błąd podczas pobierania schematu: {str(e)}"
+
 if __name__ == "__main__":
-    mcp.run(transport="sse", port=8000)
+    mcp.run(transport="sse", port=8000, host="0.0.0.0")
