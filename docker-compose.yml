@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: mattermost-bot
+    command: gunicorn --workers 3 --bind 0.0.0.0:5000 --timeout 120 mattermost:app
+    restart: always
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mcp-server
+
+  mcp-server:
+    build: .
+    container_name: mattermost-mcp
+    command: python server.py
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
