@@ -1,123 +1,64 @@
-# 🚀 Deployment Guide: Mattermost Bot (LXC)
+# 🐳 Docker Deployment: Mattermost Bot
 
-This guide assumes you are deploying the bot on a **Proxmox LXC Container** (Debian 12 or Ubuntu 24.04).
+This guide allows you to run the Bot and MCP Server in Docker containers, connecting to your existing external Ollama and PostgreSQL services.
 
-## 1. Prepare the LXC Container
+## 1. Setup
 
-Run these commands inside your LXC container's console as `root`.
+### Prerequisites
+*   Docker & Docker Compose installed on your server.
+*   Your project files cloned to the server.
 
-### Update & Install System Dependencies
-```bash
-apt update && apt upgrade -y
-apt install -y python3 python3-venv python3-pip git curl
-```
+### Configuration
+Ensure your `.env` file is set up in the project root.
 
-### Create Service User
-Create a dedicated user to run the application securely.
-```bash
-useradd -m -s /bin/bash mattermost
-```
+**Important for Networking:**
+Since Docker runs in an isolated network, `localhost` refers to the container, not your server.
+*   If Ollama/DB are on the **Host Machine**, use `http://host.docker.internal:11434` (we enabled this mapping in compose).
+*   If they are on **Another Server**, use their real IP (e.g., `192.168.1.50`).
 
-## 2. Application Setup
-
-### Clone/Copy the Project
-We will install the application to `/opt/mattermost-bot`.
-
-```bash
-# Create directory and set permissions
-mkdir -p /opt/mattermost-bot
-chown mattermost:mattermost /opt/mattermost-bot
-```
-
-*Now, copy your project files (via SCP, Git, or FileZilla) into `/opt/mattermost-bot` on the container.*
-
-### Install Python Dependencies
-Switch to the user and set up the environment.
-
-```bash
-su - mattermost
-cd /opt/mattermost-bot
-
-# Create Virtual Environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install Requirements
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# Exit user session
-exit
-```
-
-### Configure Environment Variables
-Create/Edit the `.env` file with production secrets.
-
-```bash
-nano /opt/mattermost-bot/.env
-```
-
-**Paste your `.env` content:**
-Ensure you point `OLLAMA_HOST` and `DB_HOST` to your external servers' IPs.
-
-```bash
-# Example
-MATTERMOST_TOKEN=your_token_here
+Example `.env`:
+```env
+# Mattermost
+MATTERMOST_TOKEN=your_token
 FLASK_PORT=5000
-OLLAMA_HOST=http://192.168.1.50:11434  # External Ollama IP
-DB_HOST=192.168.1.50                 # External DB IP
+
+# Ollama (External)
+OLLAMA_HOST=http://192.168.1.50:11434
+MODEL_NAME=llama3.1:latest
+
+# MCP Server
+MCP_SERVER_URL=http://mcp-server:8000/sse  # Note: 'mcp-server' is the docker service name!
+
+# Database (External)
+DB_HOST=192.168.1.50
 DB_NAME=postgres
 DB_USER=postgres
 DB_PASS=password
 ```
+**CRITICAL**: `MCP_SERVER_URL` must point to `http://mcp-server:8000/sse` because inside the Docker network, the bot sees the other container by its service name `mcp-server`.
 
-Set permissions so only the `mattermost` user can read it:
+## 2. Run
+
+### Start in Background
 ```bash
-chown mattermost:mattermost /opt/mattermost-bot/.env
-chmod 600 /opt/mattermost-bot/.env
+docker-compose up -d --build
 ```
 
-## 3. Install Systemd Services
-
-Copy the service files from the `deployment/` directory to the system directory.
-
+### View Logs
 ```bash
-cd /opt/mattermost-bot/deployment
+# Follow all logs
+docker-compose logs -f
 
-cp mcp-server.service /etc/systemd/system/
-cp mattermost-bot.service /etc/systemd/system/
-
-# Reload Systemd to see new services
-systemctl daemon-reload
+# Follow specific service
+docker-compose logs -f bot
+docker-compose logs -f mcp-server
 ```
 
-### Enable and Start Services
-
+### Stop & Remove
 ```bash
-# Enable auto-start on boot
-systemctl enable mcp-server
-systemctl enable mattermost-bot
-
-# Start them now
-systemctl start mcp-server
-systemctl start mattermost-bot
+docker-compose down
 ```
 
-### Check Status
-
-```bash
-systemctl status mcp-server
-systemctl status mattermost-bot
-```
-
-## 4. Troubleshooting
-
-**View Logs:**
-```bash
-journalctl -u mattermost-bot -f
-journalctl -u mcp-server -f
-```
-
-**Common Issues:**
-*   **Connection Refused**: Check if `OLLAMA_HOST` and `DB_HOST` are reachable from this container (Ping them). Check Proxmox Firewall.
-*   **Permission Denied**: Ensure `/opt/mattermost-bot` is owned by `mattermost:mattermost`.
+## 3. Verify
+*   **Web Check**: `curl http://localhost:5000` (Should see method not allowed or similar Flask response).
+*   **Mattermost**: Try `/ask hello` in your chat.
