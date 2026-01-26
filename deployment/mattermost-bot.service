@@ -1,0 +1,16 @@
+[Unit]
+Description=Mattermost Bot Application
+After=network.target mcp-server.service
+
+[Service]
+Type=simple
+User=mattermost
+WorkingDirectory=/opt/mattermost-bot
+EnvironmentFile=/opt/mattermost-bot/.env
+# Adjust workers based on CPU cores: (2 x CPUs) + 1
+ExecStart=/opt/mattermost-bot/.venv/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 --timeout 120 mattermost:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
