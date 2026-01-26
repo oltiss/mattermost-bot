@@ -12,9 +12,9 @@ load_dotenv()
 # KONFIGURACJA ADRESÓW (Domyślne)
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8000/sse")
-MODEL_NAME = os.getenv("MODEL_NAME", "llama3.1:latest")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 
-async def process_query(prompt: str, ollama_host: str = OLLAMA_HOST, mcp_url: str = MCP_SERVER_URL, model: str = MODEL_NAME) -> str:
+async def process_query(prompt: str, ollama_host: str = OLLAMA_HOST, mcp_url: str = MCP_SERVER_URL, model: str = OLLAMA_MODEL) -> str:
     print(f"🔗 Łączenie z MCP (Narzędzia) pod: {mcp_url}...")
 
     ollama_client = ollama.Client(host=ollama_host)

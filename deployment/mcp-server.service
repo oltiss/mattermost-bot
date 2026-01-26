@@ -1,0 +1,15 @@
+[Unit]
+Description=Mattermost Bot MCP Server
+After=network.target
+
+[Service]
+Type=simple
+User=mattermost
+WorkingDirectory=/opt/mattermost-bot
+EnvironmentFile=/opt/mattermost-bot/.env
+ExecStart=/opt/mattermost-bot/.venv/bin/python server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
