@@ -5,9 +5,66 @@ from dotenv import load_dotenv
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.types import CallToolResult
+import json
+import re
 
 # Wczytaj zmienne środowiskowe
 load_dotenv()
+
+
+def parse_tool_call_from_content(content: str) -> dict | None:
+    """
+    Próbuje wyekstrahować tool call z treści tekstowej.
+    Ollama czasami zwraca JSON jako tekst zamiast struktury tool_calls.
+    """
+    if not content:
+        return None
+
+    # Usuń markdown code blocks jeśli są
+    content_clean = content
+    if "```" in content:
+        # Wyciągnij zawartość z bloków kodu
+        import re as regex
+        code_match = regex.search(r'```(?:json)?\s*(.*?)\s*```', content, regex.DOTALL)
+        if code_match:
+            content_clean = code_match.group(1)
+
+    # Znajdź wszystkie możliwe pozycje początkowe JSON
+    # Próbuj parsować od każdego '{'
+    start_positions = [i for i, c in enumerate(content_clean) if c == '{']
+
+    for start in start_positions:
+        # Znajdź pasujący nawias zamykający
+        depth = 0
+        end = start
+        for i, c in enumerate(content_clean[start:], start):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+
+        if end > start:
+            try:
+                candidate = content_clean[start:end]
+                data = json.loads(candidate)
+
+                # Sprawdź czy to wygląda jak tool call
+                if isinstance(data, dict) and "name" in data:
+                    args = data.get("parameters") or data.get("arguments", {})
+                    print(f"📋 Sparsowano tool call z tekstu: {data['name']}")
+                    return {
+                        "function": {
+                            "name": data["name"],
+                            "arguments": args if isinstance(args, dict) else {}
+                        }
+                    }
+            except json.JSONDecodeError:
+                continue
+
+    return None
 
 # KONFIGURACJA ADRESÓW (Domyślne)
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
@@ -45,48 +102,65 @@ async def process_query(prompt: str, ollama_host: str = OLLAMA_HOST, mcp_url: st
                         }
                     })
 
-                # 3. Wysyłamy zapytanie do Ollama
-                response = ollama_client.chat(
-                    model=model,
-                    messages=messages,
-                    tools=ollama_tools
-                )
+                # 3. Pętla agentic - wykonuj tool calls dopóki model nie da finalnej odpowiedzi
+                MAX_ITERATIONS = 10
+                iteration = 0
 
-                messages.append(response["message"])
+                while iteration < MAX_ITERATIONS:
+                    iteration += 1
+                    print(f"🔄 Iteracja {iteration}/{MAX_ITERATIONS}")
 
-                # 4. Jeśli Ollama chce użyć narzędzia...
-                if response["message"].get("tool_calls"):
-                    for tool_call in response["message"]["tool_calls"]:
+                    # Wysyłamy zapytanie do Ollama
+                    response = ollama_client.chat(
+                        model=model,
+                        messages=messages,
+                        tools=ollama_tools
+                    )
+
+                    message = response["message"]
+                    content = message.get("content", "")
+
+                    # Pobieramy tool calls - strukturalnie lub z treści
+                    tool_calls = message.get("tool_calls", [])
+
+                    # Fallback: jeśli brak tool_calls, sprawdź czy content zawiera JSON
+                    if not tool_calls and content:
+                        parsed_call = parse_tool_call_from_content(content)
+                        if parsed_call:
+                            print(f"⚠️ Wykryto tool call w treści tekstowej (fallback)")
+                            tool_calls = [parsed_call]
+
+                    # Jeśli brak tool calls - to jest finalna odpowiedź
+                    if not tool_calls:
+                        print(f"🤖 Odpowiedź finalna: {content}")
+                        return content
+
+                    # Dodajemy odpowiedź modelu do historii
+                    messages.append(message)
+
+                    # Wykonujemy wszystkie tool calls
+                    for tool_call in tool_calls:
                         fn_name = tool_call["function"]["name"]
                         args = tool_call["function"]["arguments"]
 
                         print(f"🤖 Model prosi o: {fn_name} {args}")
 
-                        # 5. Wykonujemy narzędzie na serwerze MCP
+                        # Wykonujemy narzędzie na serwerze MCP
                         result = await session.call_tool(fn_name, arguments=args)
 
                         # Pobieramy treść wyniku
                         tool_output = result.content[0].text
-                        print(f"🔧 Wynik: {tool_output}")
+                        print(f"🔧 Wynik: {tool_output[:500]}..." if len(tool_output) > 500 else f"🔧 Wynik: {tool_output}")
 
-                        # 6. Zwracamy wynik do modelu
+                        # Zwracamy wynik do modelu
                         messages.append({
                             "role": "tool",
                             "content": str(tool_output),
                         })
 
-                    # Finalna odpowiedź modelu
-                    final_response = ollama_client.chat(
-                        model=model,
-                        messages=messages
-                    )
-                    final_content = final_response['message']['content']
-                    print(f"🤖 Odpowiedź: {final_content}")
-                    return final_content
-                else:
-                    content = response['message']['content']
-                    print(f"🤖 Odpowiedź: {content}")
-                    return content
+                # Jeśli przekroczono limit iteracji
+                print("⚠️ Przekroczono limit iteracji")
+                return "Przekroczono maksymalną liczbę kroków. Spróbuj ponownie z prostszym zapytaniem."
 
     except Exception as e:
         import traceback
