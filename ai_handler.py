@@ -14,7 +14,7 @@ load_dotenv()
 
 def parse_tool_call_from_content(content: str) -> dict | None:
     """
-    Próbuje wyekstrahować tool call z treści tekstowej.
+    Próbuje wyekstraktować tool call z treści tekstowej.
     Ollama czasami zwraca JSON jako tekst zamiast struktury tool_calls.
     """
     if not content:
