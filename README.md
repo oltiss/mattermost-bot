@@ -1,64 +1,123 @@
-# 🐳 Docker Deployment: Mattermost Bot
+# Mattermost AI Database Assistant 🤖📊
 
-This guide allows you to run the Bot and MCP Server in Docker containers, connecting to your existing external Ollama and PostgreSQL services.
+![Python](https://img.shields.io/badge/python-3.11-blue.svg)
+![Docker](https://img.shields.io/badge/docker-available-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-## 1. Setup
+A smart Mattermost bot that bridges the gap between your chat team and your data. Powered by **Ollama** and the **Model Context Protocol (MCP)**, this bot allows users to query a PostgreSQL database using natural language.
 
-### Prerequisites
-*   Docker & Docker Compose installed on your server.
-*   Your project files cloned to the server.
+## 🚀 Features
 
-### Configuration
-Ensure your `.env` file is set up in the project root.
+- **Natural Language SQL**: Ask questions in English, get answers from your database.
+- **Schema Aware**: The bot inspects your database schema (`get_database_schema`) to write accurate queries.
+- **Secure by Design**:
+  - Runs in a read-only database session.
+  - Restricted to `SELECT` statements.
+  - Uses MCP to isolate database tools from the LLM logic.
+- **Docker Ready**: Fully containerized setup for easy deployment.
 
-**Important for Networking:**
-Since Docker runs in an isolated network, `localhost` refers to the container, not your server.
-*   If Ollama/DB are on the **Host Machine**, use `http://host.docker.internal:11434` (we enabled this mapping in compose).
-*   If they are on **Another Server**, use their real IP (e.g., `192.168.1.50`).
+## 🛠 Architecture
 
-Example `.env`:
-```env
-# Mattermost
-MATTERMOST_TOKEN=your_token
-FLASK_PORT=5000
+The project consists of two main services running in Docker:
 
-# Ollama (External)
-OLLAMA_HOST=http://192.168.1.50:11434
-MODEL_NAME=llama3.1:latest
+1.  **Bot Service (`mattermost.py`)**: Handles Mattermost webhooks and manages the conversation state.
+2.  **MCP Server (`server.py`)**: A dedicated tool server that executes database queries.
 
-# MCP Server
-MCP_SERVER_URL=http://mcp-server:8000/sse  # Note: 'mcp-server' is the docker service name!
+They communicate via the Model Context Protocol (MCP) over SSE (Server-Sent Events).
 
-# Database (External)
-DB_HOST=192.168.1.50
-DB_NAME=postgres
-DB_USER=postgres
-DB_PASS=password
-```
-**CRITICAL**: `MCP_SERVER_URL` must point to `http://mcp-server:8000/sse` because inside the Docker network, the bot sees the other container by its service name `mcp-server`.
+## 📋 Prerequisites
 
-## 2. Run
+- **Docker** and **Docker Compose** installed.
+- **Ollama** running (locally or on a network server) with a model pulled (e.g., `llama3.1`).
+- **PostgreSQL** database.
+- **Mattermost** server (admin access required to set up webhooks).
 
-### Start in Background
-```bash
-docker-compose up -d --build
-```
+## ⚙️ Configuration
 
-### View Logs
-```bash
-# Follow all logs
-docker-compose logs -f
+1.  **Clone the repository**:
 
-# Follow specific service
-docker-compose logs -f bot
-docker-compose logs -f mcp-server
-```
+    ```bash
+    git clone <repository-url>
+    cd mattermost-bot
+    ```
 
-### Stop & Remove
-```bash
-docker-compose down
-```
+2.  **Create a `.env` file**:
+    Create a file named `.env` in the root directory with the following content:
 
-## 3. Verify
-*   **Web Check**: `curl http://localhost:5000` (Should see method not allowed or similar Flask response).
-*   **Mattermost**: Try `/ask hello` in your chat.
+    ```ini
+    # --- Mattermost Settings ---
+    # Token provided by Mattermost Outgoing Webhook
+    MATTERMOST_TOKEN=your_mattermost_token
+    # Port for the Flask bot
+    FLASK_PORT=5000
+
+    # --- Ollama Settings ---
+    # URL where Ollama is running.
+    # If running on the host machine, use http://host.docker.internal:11434
+    OLLAMA_HOST=http://host.docker.internal:11434
+    OLLAMA_MODEL=llama3.1:latest
+
+    # --- MCP Settings ---
+    # Internal Docker URL for the MCP server (do not change unless you rename services)
+    MCP_SERVER_URL=http://mcp-server:8000/sse
+
+    # --- Database Settings ---
+    DB_HOST=host.docker.internal
+    DB_NAME=postgres
+    DB_USER=postgres
+    DB_PASS=your_password
+    DB_SCHEMA=public
+    ```
+
+## 🐳 Running with Docker
+
+1.  **Start the services**:
+
+    ```bash
+    docker-compose up -d --build
+    ```
+
+2.  **Check logs**:
+
+    ```bash
+    docker-compose logs -f
+    ```
+
+3.  **Stop services**:
+    ```bash
+    docker-compose down
+    ```
+
+## 🔌 Mattermost Integration
+
+1.  Go to **Main Menu > Integrations > Outgoing Webhooks**.
+2.  Click **Add Outgoing Webhook**.
+3.  Fill in the details:
+    - **Content Type**: `application/x-www-form-urlencoded`
+    - **Trigger Words**: `!db`, `!ask` (or your preference).
+    - **Callback URLs**: `http://<YOUR_SERVER_IP>:5000/`
+4.  Copy the **Token** displayed after creation and paste it into your `.env` file as `MATTERMOST_TOKEN`.
+5.  Restart the bot container if you changed the `.env` file:
+    ```bash
+    docker-compose restart bot
+    ```
+
+## 🧪 Usage
+
+In any Mattermost channel where the webhook is configured:
+
+> **User**: !db Show me the last 5 users who registered.
+>
+> **Bot**: 🧠 Thinking... (Query: !db Show me the last 5 users who registered.)
+>
+> **Bot**: Here are the last 5 users:
+> | id | username | created_at |
+> |---|---|---|
+> | 101 | alice | 2023-10-01 |
+> ...
+
+## 🛡 Security Notes
+
+- The MCP server enforces a **Read-Only** session on the PostgreSQL connection.
+- Only `SELECT` statements are allowed by the `query_database` tool.
+- Ensure your database user (`DB_USER`) has appropriate permissions (least privilege).

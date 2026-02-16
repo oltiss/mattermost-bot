@@ -1,0 +1,33 @@
+from dotenv import load_dotenv
+from flask import jsonify
+import os
+
+load_dotenv()
+DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
+SQL_TOKEN = os.getenv("SQL_TOKEN")
+ID_TOKEN = os.getenv("ID_TOKEN")
+PPPOE_TOKEN = os.getenv("PPPOE_TOKEN")
+
+
+def slash_coms(token, id):
+
+    prompt = None
+
+    if token == SQL_TOKEN:
+        prompt = ""
+
+
+    if token == ID_TOKEN:
+        prompt = f"""Użytkownik podał ci właśnie klienta o id:{id} z tabeli clients,
+                     która znajduje się w schemacie {DB_SCHEMA}. Masz na celu znalezienie rekordu
+                     z tym id, a następnie z kolumny client pobierz dane. Dane te są zapisane w JSON object.
+                     Jako odpowiedź wypisz tylko te dane z odpowiednimi opisami.
+                     Jeśli coś jest równe null, false, 0 lub empty string i tak masz to wypisać."""
+
+
+
+    if token == PPPOE_TOKEN:
+        prompt = f"""  """
+
+
+    return prompt
