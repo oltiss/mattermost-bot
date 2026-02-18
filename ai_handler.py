@@ -73,6 +73,8 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 
 async def process_query(prompt: str, ollama_host: str = OLLAMA_HOST, mcp_url: str = MCP_SERVER_URL, model: str = OLLAMA_MODEL) -> str:
     print(f"🔗 Łączenie z MCP (Narzędzia) pod: {mcp_url}...")
+    print(f"🧹 Inicjalizacja nowej konwersacji (brak historii).")
+    print(f"📝 Zapytanie do AI: {prompt}")
 
     ollama_client = ollama.Client(host=ollama_host)
     messages = [
