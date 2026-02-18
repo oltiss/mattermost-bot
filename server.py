@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Inicjalizacja serwera
-mcp = FastMCP("Mój Serwer Lokalny")
+mcp = FastMCP("mcp-mattermost")
 
 # Konfiguracja bazy danych
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -28,7 +28,7 @@ def get_db_connection():
     return conn
 
 @mcp.tool()
-def query_database(query: str) -> str:
+def query_database(query: str, schema: str = DB_SCHEMA) -> str:
     """
     Wykonuje zapytanie SQL do bazy danych PostgreSQL.
     Narzędzie działa w trybie TYLKO DO ODCZYTU.
@@ -40,6 +40,19 @@ def query_database(query: str) -> str:
 
     try:
         conn = get_db_connection()
+
+        # Ustawienie search_path jeśli podano schema (i jest bezpieczne)
+        if schema:
+            clean_schema = schema.split('.')[0]
+            if clean_schema.replace("_", "").isalnum():
+                with conn.cursor() as cur:
+                    cur.execute(f"SET search_path TO {clean_schema}, public")
+            else:
+                return f"Błąd: Nieprawidłowa nazwa schematu '{schema}'. Użyj tylko nazwy schematu (np. 'public', 'model')."
+
+            # Zatwierdź transakcję ustawiającą search_path, aby móc ustawić sesję
+            conn.commit()
+
         # 2. Ustawienie sesji na read-only (dodatkowe zabezpieczenie po stronie bazy)
         conn.set_session(readonly=True)
 
@@ -79,7 +92,7 @@ def get_database_schema(schema: str = DB_SCHEMA, table_name: Optional[str] = Non
     """
     return _get_database_schema_logic(schema, table_name)
 
-def _get_database_schema_logic(schema: str = DB_SCHEMA, table_name: str = None) -> str:
+def _get_database_schema_logic(schema: str = DB_SCHEMA, table_name: Optional[str] = None) -> str:
     # Handle empty strings from LLM as defaults
     if not schema:
         schema = DB_SCHEMA
