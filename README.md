@@ -9,8 +9,9 @@ A smart Mattermost bot that bridges the gap between your chat team and your data
 ## 🚀 Features
 
 - **Natural Language SQL**: Ask questions in English, get answers from your database.
-- **Client Lookup**: Retrieve detailed client information by ID directly from the `clients` table.
+- **Direct Client & PPPoE Lookups**: Retrieve detailed client information or PPPoE IPs instantly using Slash Commands (`/id`, `/pppoe`).
 - **Schema Aware**: The bot inspects your database schema (`get_database_schema`) to ensure accurate queries.
+- **Beautiful JSON Formatting**: Database records containing JSON are parsed and displayed with proper indentation and markdown formatting directly in Mattermost.
 - **Secure by Design**:
   - Runs in a read-only database session.
   - Restricted to `SELECT` statements.
@@ -21,12 +22,12 @@ A smart Mattermost bot that bridges the gap between your chat team and your data
 
 The project consists of three main components:
 
-1.  **Bot Service (`mattermost.py`)**: A Flask application that handles Mattermost outgoing webhooks. It processes incoming requests and delegates them to the AI handler.
+1.  **Bot Service (`mattermost.py`)**: A Flask application that handles Mattermost incoming requests. It features a `/` endpoint for AI processing (Outgoing Webhooks) and a fast `/query` endpoint for direct database lookups (Slash Commands).
 2.  **AI Logic (`ai_handler.py`)**: Uses Ollama to interpret user intents and calls MCP tools.
 3.  **MCP Server (`server.py`)**: A dedicated tool server that executes database queries securely (`read-only` mode).
 4.  **Command Logic (`slash_commands.py`)**: Defines specific prompts based on the token used (e.g., general query vs. specific ID lookup).
 
-They communicate via the Model Context Protocol (MCP) over SSE (Server-Sent Events).
+For AI tasks, components communicate via the Model Context Protocol (MCP) over SSE (Server-Sent Events).
 
 ## 📋 Prerequisites
 
@@ -52,11 +53,11 @@ Create a file named `.env` in the root directory. You can use `.env.example` as 
 
 ```ini
 # --- Mattermost Settings ---
-# Token for General SQL Queries (e.g., !db)
+# Token for General SQL Queries via Webhook (e.g., !db)
 SQL_TOKEN=your_mattermost_token_for_sql
-# Token for Client ID Lookup (e.g., !client)
+# Token for Client ID Lookup (Slash Command /id)
 ID_TOKEN=your_mattermost_token_for_id_lookup
-# Token for PPPoE Status (e.g., !pppoe)
+# Token for PPPoE Status (Slash Command /pppoe)
 PPPOE_TOKEN=your_mattermost_token_for_pppoe
 
 # Port for the Flask bot
@@ -101,7 +102,9 @@ DB_SCHEMA=public
 
 ## 🔌 Mattermost Integration
 
-You need to set up **Outgoing Webhooks** in Mattermost for each command you want to use.
+You can integrate the bot using **Outgoing Webhooks** (for AI interactions) and **Slash Commands** (for instant, hardcoded DB queries).
+
+### Part 1: Outgoing Webhook (For AI chat)
 
 1.  Go to **Main Menu > Integrations > Outgoing Webhooks**.
 2.  Click **Add Outgoing Webhook**.
@@ -113,23 +116,28 @@ You need to set up **Outgoing Webhooks** in Mattermost for each command you want
     - **Trigger Words**: `!db`, `!ask`
     - Copy the **Token** -> Paste into `.env` as `SQL_TOKEN`.
 
-5.  **Create Webhook for Client ID Lookup**:
-    - **Trigger Words**: `!client`, `!id`
+### Part 2: Slash Commands (For direct DB lookups)
+
+1.  Go to **Main Menu > Integrations > Slash Commands**.
+2.  Click **Add Slash Command**.
+
+3.  **Command for Client ID (`/id`)**:
+    - **Command Word**: `id`
+    - **Request URL**: `http://<YOUR_BOT_SERVER_IP>:5000/query`
+    - **Request Method**: `POST`
     - Copy the **Token** -> Paste into `.env` as `ID_TOKEN`.
 
-6.  **(Optional) Create Webhook for PPPoE**:
-    - **Trigger Words**: `!pppoe`
+4.  **Command for PPPoE (`/pppoe`)**:
+    - **Command Word**: `pppoe`
+    - **Request URL**: `http://<YOUR_BOT_SERVER_IP>:5000/query`
+    - **Request Method**: `POST`
     - Copy the **Token** -> Paste into `.env` as `PPPOE_TOKEN`.
-
-7.  **Restart the bot container** if you updated the `.env` file:
-    ```bash
-    docker-compose restart bot
-    ```
 
 ## 🧪 Usage
 
 ### General SQL Query (`SQL_TOKEN`)
-*Use this for natural language questions on your data.*
+
+_Use this for natural language questions on your data._
 
 > **User**: !db Show me the last 5 users who registered.
 >
@@ -137,14 +145,21 @@ You need to set up **Outgoing Webhooks** in Mattermost for each command you want
 >
 > **Bot**: Here are the last 5 users: ...
 
-### Client ID Lookup (`ID_TOKEN`)
-*Use this to fetch specific client details from the `clients` table by ID.*
+### Client ID Lookup (Slash Command)
 
-> **User**: !client 12345
+_Use this to instantly fetch specific client details from the `clients` table by ID._
+
+> **User**: `/id 1310`
 >
-> **Bot**: 🧠 Thinking...
+> **Bot**: **Wynik zapytania dla client_id = 1310:** ... (Formatted JSON)
+
+### PPPoE Lookup (Slash Command)
+
+_Use this to find hardware IPs linked to a specific client ID._
+
+> **User**: `/pppoe 1310`
 >
-> **Bot**: Client 12345 details: {name: "John Doe", status: "Active"...}
+> **Bot**: **Znaleziono 2 rekord(ów) dla client_id = 1310:** ... (Formatted JSON Array)
 
 ## 🛡 Security Notes
 
@@ -154,12 +169,12 @@ You need to set up **Outgoing Webhooks** in Mattermost for each command you want
 
 ## ❓ Troubleshooting
 
-| Issue | Possible Cause | Solution |
-| :--- | :--- | :--- |
-| **Bot doesn't respond** | Webhook URL is unreachable from Mattermost. | checking firewall rules and ensuring the bot container is running and exposing port 5000. |
-| **"Invalid token"** | The token used in `.env` doesn't match Mattermost. | Verify `SQL_TOKEN`, `ID_TOKEN`, etc. in `.env`. |
-| **Ollama connection error** | `OLLAMA_HOST` is incorrect. | Use `http://host.docker.internal:11434` if running locally, or the correct IP address. |
-| **Database error** | Credentials or Schema incorrect. | Check `DB_HOST`, `DB_USER`, `DB_PASS`, and `DB_SCHEMA` variables. |
+| Issue                       | Possible Cause                                     | Solution                                                                                  |
+| :-------------------------- | :------------------------------------------------- | :---------------------------------------------------------------------------------------- |
+| **Bot doesn't respond**     | Webhook URL is unreachable from Mattermost.        | checking firewall rules and ensuring the bot container is running and exposing port 5000. |
+| **"Invalid token"**         | The token used in `.env` doesn't match Mattermost. | Verify `SQL_TOKEN`, `ID_TOKEN`, etc. in `.env`.                                           |
+| **Ollama connection error** | `OLLAMA_HOST` is incorrect.                        | Use `http://host.docker.internal:11434` if running locally, or the correct IP address.    |
+| **Database error**          | Credentials or Schema incorrect.                   | Check `DB_HOST`, `DB_USER`, `DB_PASS`, and `DB_SCHEMA` variables.                         |
 
 ---
 
