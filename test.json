@@ -1,0 +1,57 @@
+{
+  "client": {
+    "name": "Orlicka Maria Bogus\u0142awa",
+    "status": "ACTIVE",
+    "typ": "CLIENT_PERSON",
+    "description": "",
+    "agreed": false,
+    "invoiceOnMail": false,
+    "iban": "PL97105001617425000000002455"
+  },
+  "customer": {
+    "firstName": "Maria Bogus\u0142awa",
+    "lastName": "Orlicka",
+    "documentNumber": "CBI986642",
+    "pesel": "66090809826",
+    "email": ["mariaimaniek@wp.pl"],
+    "firstName2": null,
+    "lastName2": null,
+    "nip": null,
+    "shortName": null,
+    "address": {
+      "street_1": "Poprzeczna",
+      "street_2": null,
+      "attribute": "ul.",
+      "numberProperty": "1",
+      "numberBlock": null,
+      "numberApartment": null,
+      "zipCode": "32-620",
+      "city": "Brzeszcze",
+      "state": "MA\u0141OPOLSKIE",
+      "country": "Polska",
+      "teryt": {
+        "terc": "1213023",
+        "simc": "0938120",
+        "ulic": "17171",
+        "x86": "19.15111",
+        "y86": "49.98075"
+      }
+    }
+  },
+  "company": null,
+  "addressCorrespondence": {
+    "enabled": false,
+    "name": null,
+    "street_1": null,
+    "numberProperty": null,
+    "numberBlock": null,
+    "numberApartment": null,
+    "zipCode": null,
+    "city": null,
+    "state": null,
+    "country": null
+  },
+  "contact": { "person": [{ "fullName": null, "phoneNumber": "663083321" }] },
+  "socialMedia": { "skype": null, "gaduGadu": null },
+  "balance": { "balance": false, "balanceDate": null }
+}
