@@ -12,12 +12,6 @@ PPPOE_TOKEN = os.getenv("PPPOE_TOKEN")
 FLASK_PORT = os.getenv("FLASK_PORT", 5000)
 
 def flatten_json(y):
-    """
-    Recursively flattens a nested dictionary or list.
-    Keys are joined with a dot. List elements are indexed.
-    e.g., {'a': {'b': [1, {'c': 2}]}} -> {'a.b.0': 1, 'a.b.1.c': 2}
-    Handles empty lists and dictionaries.
-    """
     out = {}
 
     def flatten(x, name=''):
@@ -42,43 +36,6 @@ def flatten_json(y):
         return y
     return out
 
-@app.route('/', methods=['POST'])
-def mm_webhook():
-    data = request.form
-    token = data.get('token')
-    text = data.get('text', '')
-    response_url = data.get('response_url')
-    user_name = data.get('user_name', 'User')
-
-    if not text:
-         return jsonify({
-            "response_type": "ephemeral",
-            "text": "Please provide a query."
-        })
-
-    if not response_url:
-        return jsonify({
-            "response_type": "ephemeral",
-            "text": "Missing response_url. This command must be run from Mattermost."
-        })
-
-    system_instruction = slash_coms(token, text)
-    if system_instruction is not None:
-        prompt = system_instruction
-    else:
-        return jsonify({"text": "Invalid token"}), 401
-
-
-
-    # Start background processing
-    thread = threading.Thread(target=handle_background_processing, args=(prompt, response_url))
-    thread.start()
-
-    # Return immediate acknowledgement
-    return jsonify({
-        "response_type": "in_channel",
-        "text": f"🧠 Thinking... (Query: {text})"
-    })
 
 
 @app.route('/query/id', methods=['POST'])
@@ -180,7 +137,7 @@ def query_id():
         return jsonify({"response_type": "ephemeral", "text": f"Wewnętrzny błąd serwera: {str(e)}"}), 200
 
 
-@app.route('/query/pppoe', methods=['GET', 'POST'])
+@app.route('/query/pppoe', methods=['POST'])
 def query_pppoe():
     """
     Endpoint dla slash command: /pppoe
