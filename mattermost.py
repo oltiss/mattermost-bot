@@ -86,7 +86,6 @@ def query_id():
         with conn.cursor() as cur:
             cur.execute(query, (query_id,))
             rows = cur.fetchall()
-        conn.close()
 
         if not rows:
             return jsonify({"response_type": "ephemeral", "text": f"Nie znaleziono klienta o client_id = {query_id}"}), 200
@@ -131,7 +130,7 @@ def query_id():
             "text": f"**Wynik zapytania dla client_id = {query_id}:**\n```json\n{client_val}\n```",
             "data": {"client": client_val}
         })
-    except Error as e:
+    except psycopg2.Error as e:
         return jsonify({"response_type": "ephemeral", "text": f"Błąd bazy danych: {str(e)}"}), 200
     except Exception as e:
         return jsonify({"response_type": "ephemeral", "text": f"Wewnętrzny błąd serwera: {str(e)}"}), 200
@@ -185,7 +184,7 @@ def query_pppoe():
         with conn.cursor() as cur:
             cur.execute(query, (query_id,))
             rows = cur.fetchall()
-        conn.close()
+
 
         if not rows:
             return jsonify({"response_type": "ephemeral", "text": f"Nie znaleziono pppoe dla client_id = {query_id}"}), 200
@@ -217,7 +216,7 @@ def query_pppoe():
             "text": f"**Znaleziono {len(rows)} rekord(ów) dla client_id = {query_id}:**\n```json\n{ip_val}\n```",
             "data": {"ip": ip_val}
         })
-    except Error as e:
+    except psycopg2.Error as e:
         return jsonify({"response_type": "ephemeral", "text": f"Błąd bazy danych: {str(e)}"}), 200
     except Exception as e:
         return jsonify({"response_type": "ephemeral", "text": f"Wewnętrzny błąd serwera: {str(e)}"}), 200
