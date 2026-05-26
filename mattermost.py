@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-import os, requests, asyncio, psycopg2, threading, json
+import os, psycopg2, json
 
 load_dotenv(override=True)
 
@@ -10,6 +10,8 @@ SQL_TOKEN = os.getenv("SQL_TOKEN")
 ID_TOKEN = os.getenv("ID_TOKEN")
 PPPOE_TOKEN = os.getenv("PPPOE_TOKEN")
 FLASK_PORT = os.getenv("FLASK_PORT", 5000)
+DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
+
 
 def flatten_json(y):
     out = {}
@@ -37,47 +39,48 @@ def flatten_json(y):
     return out
 
 
-
-@app.route('/query/id', methods=['POST'])
-def query_id():
-    """
-    Endpoint dla slash command: /id
-    Wykonuje zapytanie o dane klienta na podstawie client_id.
-    """
-    from dotenv import load_dotenv
-    from psycopg2 import Error
-
-    load_dotenv(override=True)
-
-    DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_SCHEMA = (
-        os.getenv("DB_HOST", "localhost"),
-        os.getenv("DB_NAME", "postgres"),
-        os.getenv("DB_USER", "postgres"),
-        os.getenv("DB_PASS"),
-        os.getenv("DB_SCHEMA", "public"),
+def _get_db_conn():
+    return psycopg2.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        database=os.getenv("DB_NAME", "postgres"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASS"),
+        connect_timeout=10
     )
-    ID_TOKEN = os.getenv("ID_TOKEN")
 
+
+def _parse_request() -> tuple[dict, str]:
     if request.is_json:
         data = request.get_json(silent=True) or {}
     else:
         data = request.values
+    return data, data.get('text', '').strip()
 
-    data_text = data.get('text', '')
-    provided_token = data.get('token')
-    query_id = data_text.strip().split()[0] if data_text.strip() else None
+
+def _validate_token(data: dict, env_key: str) -> str | None:
+    expected = os.getenv(env_key)
+    if not expected:
+        return f"Błąd konfiguracji: brak {env_key} w .env"
+    if data.get('token') != expected:
+        return "Błąd autoryzacji: nieprawidłowy token"
+    return None
+
+
+
+@app.route('/query/id', methods=['POST'])
+def query_id():
+    data, text = _parse_request()
+    query_id = text.split()[0] if text else None
 
     if not query_id:
         return jsonify({"response_type": "ephemeral", "text": "Błąd: Musisz podać client_id. Użycie: /id <client_id>"}), 200
 
-    if not ID_TOKEN:
-        return jsonify({"response_type": "ephemeral", "text": "Błąd konfiguracji bota: Brak tokenu ID_TOKEN w pliku .env."}), 200
-
-    if not provided_token or provided_token != ID_TOKEN:
-        return jsonify({"response_type": "ephemeral", "text": "Błąd autoryzacji: Nieprawidłowy token dla komendy /id."}), 200
+    auth_error = _validate_token(data, "ID_TOKEN")
+    if auth_error:
+        return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
 
     try:
-        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS, connect_timeout=10)
+        conn = _get_db_conn()
         with conn.cursor() as cur:
             cur.execute("SET search_path TO " + DB_SCHEMA + ", public")
             conn.commit()
@@ -100,7 +103,7 @@ def query_id():
                         "name": flat_dict.get("name") or flat_dict.get("client.name"),
                         "status": flat_dict.get("status") or flat_dict.get("client.status"),
                         "typ": flat_dict.get("typ") or flat_dict.get("client.typ"),
-                        "description": flat_dict.get("desciption") or flat_dict.get("client.description"),
+                        "description": flat_dict.get("description") or flat_dict.get("client.description"),
                         "iban": flat_dict.get("iban") or flat_dict.get("client.iban"),
                         "email": flat_dict.get("email") or flat_dict.get("customer.email.0"),
                         "phoneNumber": flat_dict.get("phoneNumber") or flat_dict.get("contact.person.0.phoneNumber"),
@@ -138,44 +141,18 @@ def query_id():
 
 @app.route('/query/pppoe', methods=['POST'])
 def query_pppoe():
-    """
-    Endpoint dla slash command: /pppoe
-    Wykonuje zapytanie o dane pppoe na podstawie client_id.
-    """
-    from dotenv import load_dotenv
-    from psycopg2 import Error
-
-    load_dotenv(override=True)
-
-    DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_SCHEMA = (
-        os.getenv("DB_HOST", "localhost"),
-        os.getenv("DB_NAME", "postgres"),
-        os.getenv("DB_USER", "postgres"),
-        os.getenv("DB_PASS"),
-        os.getenv("DB_SCHEMA", "public"),
-    )
-    PPPOE_TOKEN = os.getenv("PPPOE_TOKEN")
-
-    if request.is_json:
-        data = request.get_json(silent=True) or {}
-    else:
-        data = request.values
-
-    data_text = data.get('text', '')
-    provided_token = data.get('token')
-    query_id = data_text.strip().split()[0] if data_text.strip() else None
+    data, text = _parse_request()
+    query_id = text.split()[0] if text else None
 
     if not query_id:
         return jsonify({"response_type": "ephemeral", "text": "Błąd: Musisz podać client_id. Użycie: /pppoe <client_id>"}), 200
 
-    if not PPPOE_TOKEN:
-        return jsonify({"response_type": "ephemeral", "text": "Błąd konfiguracji bota: Brak tokenu PPPOE_TOKEN w pliku .env."}), 200
-
-    if not provided_token or provided_token != PPPOE_TOKEN:
-        return jsonify({"response_type": "ephemeral", "text": "Błąd autoryzacji: Nieprawidłowy token dla komendy /pppoe."}), 200
+    auth_error = _validate_token(data, "PPPOE_TOKEN")
+    if auth_error:
+        return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
 
     try:
-        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS, connect_timeout=10)
+        conn = _get_db_conn()
         with conn.cursor() as cur:
             cur.execute("SET search_path TO " + DB_SCHEMA + ", public")
             conn.commit()
