@@ -1,0 +1,11 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+README.md
+*.md
+test*.py
+test*.json
