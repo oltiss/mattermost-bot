@@ -102,8 +102,12 @@ def query_id():
     auth_error = _validate_token(data, "ID_TOKEN")
     if auth_error:
         return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
+    auth_error = _validate_token(data, "ID_TOKEN")
+    if auth_error:
+        return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
 
     try:
+        conn = _get_db_conn()
         conn = _get_db_conn()
         with conn.cursor() as cur:
             set_search_path(cur, DB_SCHEMA)
@@ -127,6 +131,7 @@ def query_id():
                         "name": flat_dict.get("name") or flat_dict.get("client.name"),
                         "status": flat_dict.get("status") or flat_dict.get("client.status"),
                         "typ": flat_dict.get("typ") or flat_dict.get("client.typ"),
+                        "description": flat_dict.get("description") or flat_dict.get("client.description"),
                         "description": flat_dict.get("description") or flat_dict.get("client.description"),
                         "iban": flat_dict.get("iban") or flat_dict.get("client.iban"),
                         "email": flat_dict.get("email") or flat_dict.get("customer.email.0"),
@@ -167,6 +172,8 @@ def query_id():
 def query_pppoe():
     data, text = _parse_request()
     query_id = text.split()[0] if text else None
+    data, text = _parse_request()
+    query_id = text.split()[0] if text else None
 
     if not query_id:
         return jsonify({"response_type": "ephemeral", "text": "Błąd: Musisz podać client_id. Użycie: /pppoe <client_id>"}), 200
@@ -174,8 +181,12 @@ def query_pppoe():
     auth_error = _validate_token(data, "PPPOE_TOKEN")
     if auth_error:
         return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
+    auth_error = _validate_token(data, "PPPOE_TOKEN")
+    if auth_error:
+        return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
 
     try:
+        conn = _get_db_conn()
         conn = _get_db_conn()
         with conn.cursor() as cur:
             set_search_path(cur, DB_SCHEMA)
