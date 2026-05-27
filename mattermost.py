@@ -1,16 +1,33 @@
+from flake8 import LOG_FORMAT
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-import os, psycopg2, json
+import os, psycopg2, json, re
+
+
+def _validate_config() -> None:
+    required = ['DB_PASS', 'ID_TOKEN', 'PPPOE_TOKEN']
+    missing = [var for var in required if not os.getenv(var)]
+
+    if missing:
+        missing_str = ', '.join(missing)
+        raise EnvironmentError(
+            f"Brak wymaganych zmiennych środowiskowych: {missing_str}\n"
+            f"Skopiuj .env.example do .env i uzupełnij wartości."
+        )
 
 load_dotenv(override=True)
+_validate_config()
+
 
 app = Flask(__name__)
 
-SQL_TOKEN = os.getenv("SQL_TOKEN")
 ID_TOKEN = os.getenv("ID_TOKEN")
 PPPOE_TOKEN = os.getenv("PPPOE_TOKEN")
 FLASK_PORT = os.getenv("FLASK_PORT", 5000)
+FLASK_DEBUG = os.getenv("FLASK_DEBUG", False)
 DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
+# LOG_FORMAT = os.getenv("LOG_FORMAT", "text")
+
 
 
 def flatten_json(y):
@@ -66,6 +83,13 @@ def _validate_token(data: dict, env_key: str) -> str | None:
     return None
 
 
+def set_search_path(cur, schema: str) -> None:
+    """Ustawia search_path z walidacją nazwy schematu."""
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', schema):
+        raise ValueError(f"Nieprawidłowa nazwa schematu: {schema!r}")
+    cur.execute(f'SET search_path TO "{schema}", public')
+
+
 
 @app.route('/query/id', methods=['POST'])
 def query_id():
@@ -82,7 +106,7 @@ def query_id():
     try:
         conn = _get_db_conn()
         with conn.cursor() as cur:
-            cur.execute("SET search_path TO " + DB_SCHEMA + ", public")
+            set_search_path(cur, DB_SCHEMA)
             conn.commit()
 
         query = f"SELECT client FROM {DB_SCHEMA}.clients WHERE client_id = %s;"
@@ -154,7 +178,7 @@ def query_pppoe():
     try:
         conn = _get_db_conn()
         with conn.cursor() as cur:
-            cur.execute("SET search_path TO " + DB_SCHEMA + ", public")
+            set_search_path(cur, DB_SCHEMA)
             conn.commit()
 
         query = f"SELECT ip FROM {DB_SCHEMA}.hardware_ips WHERE client_id = %s;"
