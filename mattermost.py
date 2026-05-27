@@ -228,6 +228,7 @@ def query_pppoe():
             "text": f"**Znaleziono {len(rows)} rekord(ów) dla client_id = {query_id}:**\n```json\n{ip_val}\n```",
             "data": {"ip": ip_val}
         })
+
     except psycopg2.Error as e:
         return jsonify({"response_type": "ephemeral", "text": f"Błąd bazy danych: {str(e)}"}), 200
     except Exception as e:

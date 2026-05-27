@@ -1,0 +1,9 @@
+flask
+requests
+python-dotenv
+ollama
+mcp
+fastmcp
+psycopg2-binary
+uvicorn
+gunicorn
