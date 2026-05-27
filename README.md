@@ -1,90 +1,79 @@
-# Mattermost Ollama Bot with PostgreSQL 🐍🤖🐘
+# Mattermost Database Query Bot
 
-A powerful integration bridge that connects **Mattermost**, **Ollama (Local AI)**, and **PostgreSQL**.
+A Python Flask application that acts as a custom integration for Mattermost. This bot allows users to query specific customer details and PPPoE/IP assignments directly from a PostgreSQL database using Mattermost Slash Commands.
 
-This bot allows proper conversations via Mattermost and can autonomously query your database to answer questions about your data (Text-to-SQL).
+## Features
 
-## Features ✨
+This bot exposes two main endpoints for Mattermost slash commands:
 
-*   **💬 Natural Chat**: Talk to local LLMs (Llama 3, Mistral, etc.) running via Ollama.
-*   **🗄️ Text-to-SQL**: Ask questions like "How many users signed up today?" and the bot will:
-    1.  Detect you are asking about data.
-    2.  Read your DB schema.
-    3.  Generate a SQL query.
-    4.  Execute it (Read-Only).
-    5.  Summarize the answer in plain language.
-*   **⚡ Async & Feedback**: Immediate feedback ("Generuję odpowiedź...") so you know it's working.
-*   **🔒 Secure**: Configuration via `.env` file. No hardcoded secrets.
+* **`/id <client_id>`**: Queries customer details. It fetches data from the `clients` table and returns formatted JSON containing information such as name, status, description, IBAN, email, phone number, NIP, and address.
+* **`/pppoe <client_id>`**: Queries hardware IP configurations. It fetches data from the `hardware_ips` table and returns associated IP details.
 
-## Prerequisites 🛠️
+## Prerequisites
 
-*   Python 3.8+
-*   [Ollama](https://ollama.com/) running locally (`ollama serve`).
-*   PostgreSQL Database.
-*   Mattermost Server (with permissions to create Slash Commands).
+* Python 3.7+
+* PostgreSQL database
+* Mattermost server with the ability to create Custom Slash Commands
 
-## Installation 📥
+## Installation
 
-1.  **Clone the intent:**
-    ```bash
-    git clone https://github.com/your-repo/mattermost-ollama-bot.git
-    cd mattermost-ollama-bot
-    ```
+1. **Clone or download the project** to your desired directory.
 
-2.  **Install dependencies:**
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install -r requirements.txt
-    ```
-    *(Note: minimal requirements are `flask`, `requests`, `psycopg2-binary`, `python-dotenv`)*
+2. **Set up a virtual environment** (recommended):
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows use: venv\Scripts\activate
+   ```
 
-3.  **Configure Environment:**
-    Create a `.env` file (copy from below) and fill in your details:
-    ```ini
-    # Mattermost
-    MATTERMOST_TOKEN=your_slash_command_token
-    FLASK_PORT=5000
+3. **Install dependencies**:
+   Make sure you have `pip` installed, then run:
+   ```bash
+   pip install Flask python-dotenv requests psycopg2-binary asyncio
+   ```
+   *(Note: You can also save these into a `requirements.txt` file for easier deployment)*
 
-    # Ollama
-    OLLAMA_API_URL=http://localhost:11434/api/generate
-    OLLAMA_MODEL=llama3.1
+## Configuration
 
-    # Database
-    DB_HOST=localhost
-    DB_NAME=postgres
-    DB_USER=postgres
-    DB_PASS=password
-    ```
+The bot requires a `.env` file to securely load database credentials and Mattermost validation tokens. Create a file named `.env` in the root folder of the project (`c:\Users\michm\Desktop\vscode\mattermost-bot\`) and add the following:
 
-## Usage 🚀
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASS=your_db_password
+DB_SCHEMA=public
 
-1.  **Start the Bot:**
-    ```bash
-    python mattermost.py
-    ```
+# Mattermost Slash Command Tokens (Used to verify requests come from Mattermost)
+ID_TOKEN=your_mattermost_id_token
+PPPOE_TOKEN=your_mattermost_pppoe_token
 
-2.  **Mattermost Setup:**
-    *   Create a Slash Command (e.g., `/bot`).
-    *   Set **Request URL** to `http://YOUR_IP:5000/`.
-    *   Set **Request Method** to `POST`.
+# App Configuration
+FLASK_PORT=5000
+```
 
-## Examples 💡
+## Running the Bot
 
-*   **Chat Mode:**
-    > **/bot** Tell me a joke about Python.
-    >
-    > **TRYB CZAT**
-    > Why did the programmer quit his job? Because he didn't get arrays.
+To start the bot, simply run the Python script:
 
-*   **SQL Mode:**
-    > **/bot** List the top 5 most expensive products.
-    >
-    > **TRYB SQL**
-    > *Query:* `SELECT name, price FROM products ORDER BY price DESC LIMIT 5`
-    >
-    > Here are the top 5 products...
+```bash
+python mattermost.py
+```
 
-## Security Note ⚠️
+The application will run on `http://0.0.0.0:5000/` by default (or the port defined in `FLASK_PORT`).
 
-Ensure the database user provided in `.env` has **READ-ONLY (SELECT)** permissions. Do not use a user that can DROP or DELETE tables.
+## Mattermost Setup
+
+To connect Mattermost to your bot, go to **Integrations > Slash Commands** in your Mattermost interface and create two commands:
+
+### 1. The `/id` Command
+* **Command:** `id`
+* **Request URL:** `http://<your-server-ip>:5000/query/id`
+* **Request Method:** POST
+* *After saving, Mattermost will give you a Token. Paste this into your `.env` file as `ID_TOKEN`.*
+
+### 2. The `/pppoe` Command
+* **Command:** `pppoe`
+* **Request URL:** `http://<your-server-ip>:5000/query/pppoe`
+* **Request Method:** POST
+* *After saving, Mattermost will give you a Token. Paste this into your `.env` file as `PPPOE_TOKEN`.*
