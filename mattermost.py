@@ -1,8 +1,7 @@
-from flake8 import LOG_FORMAT
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-import os, psycopg2, json, re
-
+import os, psycopg2, json, re, logging
+from pythonjsonlogger import jsonlogger
 
 def _validate_config() -> None:
     required = ['DB_PASS', 'ID_TOKEN', 'PPPOE_TOKEN']
@@ -18,7 +17,6 @@ def _validate_config() -> None:
 load_dotenv(override=True)
 _validate_config()
 
-
 app = Flask(__name__)
 
 ID_TOKEN = os.getenv("ID_TOKEN")
@@ -26,9 +24,33 @@ PPPOE_TOKEN = os.getenv("PPPOE_TOKEN")
 FLASK_PORT = os.getenv("FLASK_PORT", 5000)
 FLASK_DEBUG = os.getenv("FLASK_DEBUG", False)
 DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
-# LOG_FORMAT = os.getenv("LOG_FORMAT", "text")
 
+def setup_logging():
+    log_format_env = os.getenv("LOG_FORMAT", "text").strip().lower()
 
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    console_handler = logging.StreamHandler()
+
+    if log_format_env == "json":
+        formatter = jsonlogger.JsonFormatter(
+            fmt='%(asctime)s %(levelname)s %(name)s %(message)s'
+        )
+    else:
+        formatter = logging.Formatter(
+            fmt='[%(asctime)s] %(levelname)s in %(name)s: %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+setup_logging()
+logger = logging.getLogger('mattermost-bot')
 
 def flatten_json(y):
     out = {}
@@ -96,18 +118,20 @@ def query_id():
     data, text = _parse_request()
     query_id = text.split()[0] if text else None
 
+    logger.info('[/id] Otrzymano zapytanie')
+
     if not query_id:
+        logger.warning('[/id] Brak client_id w zapytaniu')
         return jsonify({"response_type": "ephemeral", "text": "Błąd: Musisz podać client_id. Użycie: /id <client_id>"}), 200
 
     auth_error = _validate_token(data, "ID_TOKEN")
     if auth_error:
-        return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
-    auth_error = _validate_token(data, "ID_TOKEN")
-    if auth_error:
+        logger.warning('[/id] Nieudana autoryzacja - nieprawidłowy token')
         return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
 
+    logger.info(f"[/id] Zapytanie o client_id={query_id}")
+
     try:
-        conn = _get_db_conn()
         conn = _get_db_conn()
         with conn.cursor() as cur:
             set_search_path(cur, DB_SCHEMA)
@@ -119,6 +143,7 @@ def query_id():
             rows = cur.fetchall()
 
         if not rows:
+            logger.info(f"[/id] Nie znaleziono klienta: client_id={query_id}")
             return jsonify({"response_type": "ephemeral", "text": f"Nie znaleziono klienta o client_id = {query_id}"}), 200
 
         raw_data = rows[0][0]
@@ -146,14 +171,17 @@ def query_id():
                         "city": flat_dict.get("city") or flat_dict.get("customer.address.city"),
                         "state": flat_dict.get("state") or flat_dict.get("customer.address.state"),
                     }
-                    # Usuwamy klucze, których nie znaleziono (wartość to None)
                     final_data = {k: v for k, v in filtered_data.items() if v is not None}
                     client_val = json.dumps(final_data, indent=4, ensure_ascii=False)
+                    logger.info(f'[/id] Zwrócono dane dla client_id={query_id}')
                 else:
                     client_val = json.dumps(parsed, indent=4, ensure_ascii=False)
+                    logger.info(f'[/id] Zwrócono dane dla client_id={query_id}')
             except Exception:
                 client_val = str(raw_data)
+                logger.info(f'[/id] Zwrócono dane dla client_id={query_id}')
         else:
+            logger.info(f'[/id] Zwrócono brak danych dla client_id={query_id}')
             client_val = "Brak danych"
 
 
@@ -163,8 +191,10 @@ def query_id():
             "data": {"client": client_val}
         })
     except psycopg2.Error as e:
+        logger.error(f"[/id] Błąd bazy danych: {e}", exc_info=True)
         return jsonify({"response_type": "ephemeral", "text": f"Błąd bazy danych: {str(e)}"}), 200
     except Exception as e:
+        logger.error(f"[/id] Wewnętrzny błąd serwera: {e}", exc_info=True)
         return jsonify({"response_type": "ephemeral", "text": f"Wewnętrzny błąd serwera: {str(e)}"}), 200
 
 
@@ -172,21 +202,21 @@ def query_id():
 def query_pppoe():
     data, text = _parse_request()
     query_id = text.split()[0] if text else None
-    data, text = _parse_request()
-    query_id = text.split()[0] if text else None
+
+    logger.info('[/pppoe] Otrzymano zapytanie')
 
     if not query_id:
+        logger.warning('[/pppoe] Brak client_id w zapytaniu')
         return jsonify({"response_type": "ephemeral", "text": "Błąd: Musisz podać client_id. Użycie: /pppoe <client_id>"}), 200
 
     auth_error = _validate_token(data, "PPPOE_TOKEN")
     if auth_error:
-        return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
-    auth_error = _validate_token(data, "PPPOE_TOKEN")
-    if auth_error:
+        logger.warning('[/pppoe] Nieudana autoryzacja - nieprawidłowy token')
         return jsonify({"response_type": "ephemeral", "text": auth_error}), 200
 
+    logger.info(f"[/pppoe] Zapytanie o pppoe dla client_id={query_id}")
+
     try:
-        conn = _get_db_conn()
         conn = _get_db_conn()
         with conn.cursor() as cur:
             set_search_path(cur, DB_SCHEMA)
@@ -199,6 +229,7 @@ def query_pppoe():
 
 
         if not rows:
+            logger.info(f"[/pppoe] Nie znaleziono pppoe dla client_id={query_id}")
             return jsonify({"response_type": "ephemeral", "text": f"Nie znaleziono pppoe dla client_id = {query_id}"}), 200
 
         parsed_results = []
@@ -208,9 +239,12 @@ def query_pppoe():
                 try:
                     parsed = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
                     parsed_results.append(parsed)
+                    logger.info(f"[/pppoe] Zwrócono dane dla client_id={query_id}")
                 except Exception:
+                    logger.info(f"[/pppoe] Zwrócono dane dla client_id={query_id}")
                     parsed_results.append(str(raw_data))
             else:
+                logger.info(f"[/pppoe] Brak danych o pppoe dla client_id={query_id}")
                 parsed_results.append("Brak danych")
 
         flat_results = []
@@ -230,8 +264,10 @@ def query_pppoe():
         })
 
     except psycopg2.Error as e:
+        logger.error(f"[/pppoe] Błąd bazy danych: {e}", exc_info=True)
         return jsonify({"response_type": "ephemeral", "text": f"Błąd bazy danych: {str(e)}"}), 200
     except Exception as e:
+        logger.error(f"[/pppoe] Wewnętrzny błąd serwera: {e}", exc_info=True)
         return jsonify({"response_type": "ephemeral", "text": f"Wewnętrzny błąd serwera: {str(e)}"}), 200
 
 
