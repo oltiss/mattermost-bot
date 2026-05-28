@@ -106,7 +106,6 @@ def _validate_token(data: dict, env_key: str) -> str | None:
 
 
 def set_search_path(cur, schema: str) -> None:
-    """Ustawia search_path z walidacją nazwy schematu."""
     if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', schema):
         raise ValueError(f"Nieprawidłowa nazwa schematu: {schema!r}")
     cur.execute(f'SET search_path TO "{schema}", public')
@@ -156,6 +155,8 @@ def query_id():
                         "name": flat_dict.get("name") or flat_dict.get("client.name"),
                         "status": flat_dict.get("status") or flat_dict.get("client.status"),
                         "typ": flat_dict.get("typ") or flat_dict.get("client.typ"),
+                        "description": flat_dict.get("description") or flat_dict.get("client.description"),
+                        "description": flat_dict.get("description") or flat_dict.get("client.description"),
                         "description": flat_dict.get("description") or flat_dict.get("client.description"),
                         "description": flat_dict.get("description") or flat_dict.get("client.description"),
                         "iban": flat_dict.get("iban") or flat_dict.get("client.iban"),
@@ -262,6 +263,7 @@ def query_pppoe():
             "text": f"**Znaleziono {len(rows)} rekord(ów) dla client_id = {query_id}:**\n```json\n{ip_val}\n```",
             "data": {"ip": ip_val}
         })
+
 
     except psycopg2.Error as e:
         logger.error(f"[/pppoe] Błąd bazy danych: {e}", exc_info=True)
