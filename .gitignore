@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 example.json
 .vscode
+.pytest_cache
