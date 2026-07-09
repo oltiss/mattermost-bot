@@ -298,11 +298,12 @@ def search_query():
             set_search_path(cur, DB_SCHEMA)
             conn.commit()
 
-        query = f"SELECT ip FROM {DB_SCHEMA}.hardware_ips WHERE client_id = %s;"
+        query = f"SELECT * FROM {DB_SCHEMA}.clients WHERE client_id LIKE %s OR client_nm LIKE %s OR ;"
         with conn.cursor() as cur:
             cur.execute(query, (query_id,))
             rows = cur.fetchall()
-
+    except Exception as e:
+        print(e)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(FLASK_PORT))
