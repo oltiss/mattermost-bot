@@ -277,19 +277,19 @@ def search_query():
     data, text = _parse_request()
     phrase = text.split()[0] if text else None
 
-    logger.info('[/search] Otrzymano zapytanie')
+    logger.info('[/szukaj] Otrzymano zapytanie')
 
     if not phrase:
-        logger.warning('[/search] Brak frazy do wyszukania w zapytaniu')
-        return jsonify({"response_type": "ephemeral", "text": "Błąd: Musisz podać szukaną frazę. Uzycie: /search <szukana_fraza>"}), 200
+        logger.warning('[/szukaj] Brak frazy do wyszukania w zapytaniu')
+        return jsonify({"response_type": "ephemeral", "text": "Błąd: Musisz podać szukaną frazę. Użycie: /search <szukana_fraza>"}), 200
 
     auth_err = _validate_token(data, "SEARCH_TOKEN")
 
     if auth_err:
-        logger.warning('[/search] Nieudana autoryzacja - nieprawidłowy token')
+        logger.warning('[/szukaj] Nieudana autoryzacja - nieprawidłowy token')
         return jsonify({"response_type": "ephemeral", "text": auth_err}), 200
 
-    logger.info(f"[/search] Zapytanie o frazę: {phrase}")
+    logger.info(f"[/szukaj] Zapytanie o frazę: {phrase}")
 
     try:
         conn = _get_db_conn()
@@ -297,12 +297,41 @@ def search_query():
             set_search_path(cur, DB_SCHEMA)
             conn.commit()
 
-        query = f"SELECT id, client FROM clients WHERE client::text ILIKE %s;"
+        query = f"SELECT client_id, client FROM {DB_SCHEMA}.clients WHERE client::text ILIKE %s;"
         with conn.cursor() as cur:
-            cur.execute(query, (query_id,))
+            # Use wildcards for a partial match search
+            cur.execute(query, (f'%{phrase}%',))
             rows = cur.fetchall()
+
+        if not rows:
+            logger.info(f"[/szukaj] Nie znaleziono nic zawierające frazę: {phrase}")
+            return jsonify({"response_type": "ephemeral", "text": f"Nie znaleziono nic zawierające frazę: {phrase}"}), 200
+
+        results = []
+        for row in rows:
+            client_id, client_data = row
+            try:
+                parsed_data = json.loads(client_data) if isinstance(client_data, str) else client_data
+                name = parsed_data.get("name") or parsed_data.get("client", {}).get("name")
+                results.append({
+                    "client_id": client_id,
+                    "name": name or "Brak nazwy"
+                })
+            except (json.JSONDecodeError, AttributeError):
+                results.append({"client_id": client_id, "name": "Nie udało się sparsować danych"})
+
+        # Format results for Mattermost
+        text_response = f"**Znaleziono {len(results)} pasujących klientów dla frazy `{phrase}`:**\n"
+        text_response += "| ID Klienta | Nazwa |\n"
+        text_response += "|:---|:---|\n"
+        for res in results:
+            text_response += f"| {res['client_id']} | {res['name']} |\n"
+
+        logger.info(f"[/szukaj] Zwrócono {len(results)} wyników dla frazy: {phrase}")
+        return jsonify({"response_type": "in_channel", "text": text_response})
     except Exception as e:
-        print(e)
+        logger.error(f"[/szukaj] Wewnętrzny błąd serwera: {e}", exc_info=True)
+        return jsonify({"response_type": "ephemeral", "text": f"Wewnętrzny błąd serwera: {str(e)}"}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(FLASK_PORT))
