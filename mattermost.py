@@ -19,8 +19,7 @@ _validate_config()
 
 app = Flask(__name__)
 
-ID_TOKEN = os.getenv("ID_TOKEN")
-PPPOE_TOKEN = os.getenv("PPPOE_TOKEN")
+
 FLASK_PORT = os.getenv("FLASK_PORT", 5000)
 FLASK_DEBUG = os.getenv("FLASK_DEBUG", False)
 DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
@@ -298,7 +297,7 @@ def search_query():
             set_search_path(cur, DB_SCHEMA)
             conn.commit()
 
-        query = f"SELECT * FROM {DB_SCHEMA}.clients WHERE client_id LIKE %s OR client_nm LIKE %s OR ;"
+        query = f"SELECT id, client FROM clients WHERE client::text ILIKE %s;"
         with conn.cursor() as cur:
             cur.execute(query, (query_id,))
             rows = cur.fetchall()
