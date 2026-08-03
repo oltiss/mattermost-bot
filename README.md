@@ -4,7 +4,6 @@ A Python Flask application that acts as a custom integration for Mattermost. Thi
 
 ## Features
 
-- **Slash Commands**: Integration with Mattermost via `/id` and `/pppoe` commands.
 - **Slash Commands**: Integration with Mattermost via `/id`, `/pppoe`, and `/search` commands.
 - **Database Integration**: Fetches real-time data from a PostgreSQL database.
 - **JSON Formatting**: Returns results in a clean, formatted JSON block.
@@ -17,9 +16,6 @@ A Python Flask application that acts as a custom integration for Mattermost. Thi
 - **`/query/id`**: Queries customer details (e.g., name, status, IBAN, email, phone).
 - **`/query/search`**: Searches for customers by a given phrase.
 - **`/query/pppoe`**: Queries hardware IP configurations.
-
-* **`/query/id`**: Queries customer details (e.g., name, status, IBAN, email, phone).
-* **`/query/pppoe`**: Queries hardware IP configurations.
 
 - Python 3.12+
 - [Poetry](https://python-poetry.org/docs/#installation) (for local development)
