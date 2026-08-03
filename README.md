@@ -18,7 +18,8 @@ A Python Flask application that acts as a custom integration for Mattermost. Thi
 - **`/query/search`**: Searches for customers by a given phrase.
 - **`/query/pppoe`**: Queries hardware IP configurations.
 
-## Prerequisites
+* **`/query/id`**: Queries customer details (e.g., name, status, IBAN, email, phone).
+* **`/query/pppoe`**: Queries hardware IP configurations.
 
 - Python 3.12+
 - [Poetry](https://python-poetry.org/docs/#installation) (for local development)
