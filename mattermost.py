@@ -312,20 +312,33 @@ def search_query():
             client_id, client_data = row
             try:
                 parsed_data = json.loads(client_data) if isinstance(client_data, str) else client_data
-                name = parsed_data.get("name") or parsed_data.get("client", {}).get("name")
+                flat_dict = flatten_json(parsed_data)
+
+                name = flat_dict.get("name") or flat_dict.get("client.name")
+                phone = flat_dict.get("phoneNumber") or flat_dict.get("contact.person.0.phoneNumber")
+
+                address_parts = [
+                    flat_dict.get("address1") or flat_dict.get("customer.address.street_1"),
+                    flat_dict.get("numberProperty") or flat_dict.get("customer.address.numberProperty"),
+                    flat_dict.get("city") or flat_dict.get("customer.address.city"),
+                ]
+                address = ' '.join(filter(None, address_parts))
+
                 results.append({
                     "client_id": client_id,
-                    "name": name or "Brak nazwy"
+                    "name": name or "Brak nazwy",
+                    "address": address or "Brak adresu",
+                    "phone": phone or "Brak telefonu"
                 })
             except (json.JSONDecodeError, AttributeError):
-                results.append({"client_id": client_id, "name": "Nie udało się sparsować danych"})
+                results.append({"client_id": client_id, "name": "Błąd parsowania", "address": "-", "phone": "-"})
 
         # Format results for Mattermost
         text_response = f"**Znaleziono {len(results)} pasujących klientów dla frazy `{phrase}`:**\n"
-        text_response += "| ID Klienta | Nazwa |\n"
-        text_response += "|:---|:---|\n"
+        text_response += "| ID Klienta | Nazwa | Adres | Telefon |\n"
+        text_response += "|:---|:---|:---|:---|\n"
         for res in results:
-            text_response += f"| {res['client_id']} | {res['name']} |\n"
+            text_response += f"| {res['client_id']} | {res['name']} | {res['address']} | {res['phone']} |\n"
 
         logger.info(f"[/szukaj] Zwrócono {len(results)} wyników dla frazy: {phrase}")
         return jsonify({"response_type": "in_channel", "text": text_response})
