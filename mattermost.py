@@ -77,6 +77,26 @@ def flatten_json(y):
     return out
 
 
+def format_table_response(title: str, headers: list[str], rows: list[list[str]]) -> str:
+    if not rows:
+        return f"**{title}**\n\nBrak wyników."
+
+    col_widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(str(cell)))
+
+    def fmt_row(cells):
+        return "| " + " | ".join(str(c).ljust(col_widths[i]) for i, c in enumerate(cells)) + " |"
+
+    sep = "|" + "|".join("-" * (w + 2) for w in col_widths) + "|"
+
+    out = [f"**{title}**\n", fmt_row(headers), sep]
+    for row in rows:
+        out.append(fmt_row(row))
+    return "\n".join(out)
+
+
 def _get_db_conn():
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "localhost"),
@@ -155,9 +175,6 @@ def query_id():
                         "status": flat_dict.get("status") or flat_dict.get("client.status"),
                         "typ": flat_dict.get("typ") or flat_dict.get("client.typ"),
                         "description": flat_dict.get("description") or flat_dict.get("client.description"),
-                        "description": flat_dict.get("description") or flat_dict.get("client.description"),
-                        "description": flat_dict.get("description") or flat_dict.get("client.description"),
-                        "description": flat_dict.get("description") or flat_dict.get("client.description"),
                         "iban": flat_dict.get("iban") or flat_dict.get("client.iban"),
                         "email": flat_dict.get("email") or flat_dict.get("customer.email.0"),
                         "phoneNumber": flat_dict.get("phoneNumber") or flat_dict.get("contact.person.0.phoneNumber"),
@@ -172,24 +189,33 @@ def query_id():
                         "state": flat_dict.get("state") or flat_dict.get("customer.address.state"),
                     }
                     final_data = {k: v for k, v in filtered_data.items() if v is not None}
-                    client_val = json.dumps(final_data, indent=4, ensure_ascii=False)
+
+                    table_rows = [[k, str(v)] for k, v in final_data.items()]
+                    text_response = format_table_response(
+                        f"Dane klienta z ID = {query_id}",
+                        ["Pole", "Wartość"],
+                        table_rows
+                    )
                     logger.info(f'[/id] Zwrócono dane dla client_id={query_id}')
                 else:
-                    client_val = json.dumps(parsed, indent=4, ensure_ascii=False)
+                    text_response = format_table_response(
+                        f"Dane klienta z ID = {query_id}",
+                        ["Pole", "Wartość"],
+                        [["raw", json.dumps(parsed, ensure_ascii=False)]]
+                    )
                     logger.info(f'[/id] Zwrócono dane dla client_id={query_id}')
             except Exception:
-                client_val = str(raw_data)
+                text_response = format_table_response(
+                    f"Dane klienta (client_id = {query_id})",
+                    ["Pole", "Wartość"],
+                    [["raw", str(raw_data)]]
+                )
                 logger.info(f'[/id] Zwrócono dane dla client_id={query_id}')
         else:
             logger.info(f'[/id] Zwrócono brak danych dla client_id={query_id}')
-            client_val = "Brak danych"
+            text_response = f"**Dane klienta z ID = {query_id}**\n\nBrak danych"
 
-
-        return jsonify({
-            "response_type": "in_channel",
-            "text": f"**Wynik zapytania dla client_id = {query_id}:**\n```json\n{client_val}\n```",
-            "data": {"client": client_val}
-        })
+        return jsonify({"response_type": "in_channel", "text": text_response})
     except psycopg2.Error as e:
         logger.error(f"[/id] Błąd bazy danych: {e}", exc_info=True)
         return jsonify({"response_type": "ephemeral", "text": f"Błąd bazy danych: {str(e)}"}), 200
@@ -247,21 +273,29 @@ def query_pppoe():
                 logger.info(f"[/pppoe] Brak danych o pppoe dla client_id={query_id}")
                 parsed_results.append("Brak danych")
 
-        flat_results = []
+        table_rows = []
         for p in parsed_results:
-            if isinstance(p, (dict, list)):
-                flat_results.append(flatten_json(p))
+            if isinstance(p, dict):
+                flat = flatten_json(p)
+                # Include all fields from the flattened JSON
+                for key, value in flat.items():
+                    table_rows.append([key, str(value)])
+            elif isinstance(p, list):
+                for item in p:
+                    if isinstance(item, dict):
+                        flat = flatten_json(item)
+                        for key, value in flat.items():
+                            table_rows.append([key, str(value)])
             else:
-                flat_results.append(p)
+                table_rows.append(["raw", str(p)])
 
-        final_data = flat_results[0] if len(flat_results) == 1 else flat_results
-        ip_val = json.dumps(final_data, indent=4, ensure_ascii=False)
+        text_response = format_table_response(
+            f"PPPoE dla klienta z ID = {query_id} ({len(table_rows)} pól)",
+            ["Pole", "Wartość"],
+            table_rows
+        )
 
-        return jsonify({
-            "response_type": "in_channel",
-            "text": f"**Znaleziono {len(rows)} rekord(ów) dla client_id = {query_id}:**\n```json\n{ip_val}\n```",
-            "data": {"ip": ip_val}
-        })
+        return jsonify({"response_type": "in_channel", "text": text_response})
 
 
     except psycopg2.Error as e:
@@ -333,12 +367,12 @@ def search_query():
             except (json.JSONDecodeError, AttributeError):
                 results.append({"client_id": client_id, "name": "Błąd parsowania", "address": "-", "phone": "-"})
 
-        # Format results for Mattermost
-        text_response = f"**Znaleziono {len(results)} pasujących klientów dla frazy `{phrase}`:**\n"
-        text_response += "| ID Klienta | Nazwa | Adres | Telefon |\n"
-        text_response += "|:---|:---|:---|:---|\n"
-        for res in results:
-            text_response += f"| {res['client_id']} | {res['name']} | {res['address']} | {res['phone']} |\n"
+        table_rows = [[r["client_id"], r["name"], r["address"], r["phone"]] for r in results]
+        text_response = format_table_response(
+            f"Znaleziono {len(results)} pasujących klientów dla frazy `{phrase}`",
+            ["ID Klienta", "Nazwa", "Adres", "Telefon"],
+            table_rows
+        )
 
         logger.info(f"[/szukaj] Zwrócono {len(results)} wyników dla frazy: {phrase}")
         return jsonify({"response_type": "in_channel", "text": text_response})
